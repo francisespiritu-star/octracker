@@ -53,15 +53,18 @@ function mailEnv(string $key, ?string $default = null): ?string
 function parseMailAddress(string $value, string $defaultName = 'OCTRacker'): array
 {
     $value = trim($value);
-    if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
-        $name = trim($m[1], " \t\"'");
+    // "Name <email@domain>" or bare "<email@domain>"
+    if (preg_match('/^(?:(.+?)\s*)?<([^>]+)>$/', $value, $m)) {
+        $name = trim((string) ($m[1] ?? ''), " \t\"'");
         $email = strtolower(trim($m[2]));
         return [
             'email' => $email,
             'name' => $name !== '' ? $name : $defaultName,
         ];
     }
-    return ['email' => strtolower($value), 'name' => $defaultName];
+    // Plain email; strip accidental brackets
+    $email = strtolower(trim($value, " \t\"'<>"));
+    return ['email' => $email, 'name' => $defaultName];
 }
 
 /**
