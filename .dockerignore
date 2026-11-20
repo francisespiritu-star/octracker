@@ -1,0 +1,7 @@
+.git
+.gitignore
+config/database.local.php
+**/Thumbs.db
+**/.DS_Store
+**/*.bak
+README.md

@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * Copy this file to database.local.php and fill in real credentials.
+ * database.local.php should NOT be uploaded publicly or committed.
+ *
+ * For Hostinger / cPanel, use the MySQL host, DB name, user, and password
+ * shown in the hosting panel (not root / empty password).
+ */
+
+return [
+    'host' => 'localhost',
+    'dbname' => 'octracker',
+    'username' => 'your_db_user',
+    'password' => 'your_strong_db_password',
+];

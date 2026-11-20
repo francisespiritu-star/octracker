@@ -1,0 +1,7 @@
+# Local DB credentials — never commit or upload this file
+config/database.local.php
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.bak
