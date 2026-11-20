@@ -26,16 +26,23 @@ function buildMailtoLink(string $to, string $subject, string $body): string
 function mailEnv(string $key, ?string $default = null): ?string
 {
     $value = getenv($key);
-    if ($value !== false && $value !== '') {
-        return $value;
+    if ($value === false || $value === '') {
+        if (isset($_ENV[$key]) && (string) $_ENV[$key] !== '') {
+            $value = (string) $_ENV[$key];
+        } elseif (isset($_SERVER[$key]) && (string) $_SERVER[$key] !== '') {
+            $value = (string) $_SERVER[$key];
+        } else {
+            return $default;
+        }
     }
-    if (isset($_ENV[$key]) && (string) $_ENV[$key] !== '') {
-        return (string) $_ENV[$key];
+    $value = trim((string) $value);
+    if (
+        (str_starts_with($value, '"') && str_ends_with($value, '"'))
+        || (str_starts_with($value, "'") && str_ends_with($value, "'"))
+    ) {
+        $value = trim(substr($value, 1, -1));
     }
-    if (isset($_SERVER[$key]) && (string) $_SERVER[$key] !== '') {
-        return (string) $_SERVER[$key];
-    }
-    return $default;
+    return $value !== '' ? $value : $default;
 }
 
 /**
@@ -48,13 +55,13 @@ function parseMailAddress(string $value, string $defaultName = 'OCTRacker'): arr
     $value = trim($value);
     if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
         $name = trim($m[1], " \t\"'");
-        $email = trim($m[2]);
+        $email = strtolower(trim($m[2]));
         return [
             'email' => $email,
             'name' => $name !== '' ? $name : $defaultName,
         ];
     }
-    return ['email' => $value, 'name' => $defaultName];
+    return ['email' => strtolower($value), 'name' => $defaultName];
 }
 
 /**
@@ -115,10 +122,14 @@ function sendBrevoApiEmail(string $to, string $subject, string $body, string $fr
         return ['ok' => false, 'message' => 'BREVO_API_KEY is not set.'];
     }
 
-    $rawFrom = mailEnv('BREVO_FROM', $from) ?? $from;
+    // Must be the exact verified Brevo sender — do not fall back to SMTP_FROM / local default.
+    $rawFrom = mailEnv('BREVO_FROM');
+    if ($rawFrom === null || $rawFrom === '') {
+        return ['ok' => false, 'message' => 'BREVO_FROM is not set. Use your verified sender, e.g. olivarezcollege26@gmail.com'];
+    }
     $parsed = parseMailAddress($rawFrom, 'OCTRacker');
     if ($parsed['email'] === '' || !filter_var($parsed['email'], FILTER_VALIDATE_EMAIL)) {
-        return ['ok' => false, 'message' => 'BREVO_FROM must be a verified email (e.g. OCTracker <you@gmail.com>).'];
+        return ['ok' => false, 'message' => 'BREVO_FROM must be a verified email (got: ' . $rawFrom . ').'];
     }
 
     $payload = json_encode([
@@ -155,6 +166,9 @@ function sendBrevoApiEmail(string $to, string $subject, string $body, string $fr
 
     $decoded = json_decode((string) $response, true);
     $detail = is_array($decoded) ? (string) ($decoded['message'] ?? json_encode($decoded)) : (string) $response;
+    if (stripos($detail, 'valid sender') !== false) {
+        $detail .= ' (using sender ' . $parsed['email'] . ' — must match a Verified sender in Brevo)';
+    }
     return ['ok' => false, 'message' => 'Brevo error (' . $status . '): ' . $detail];
 }
 
