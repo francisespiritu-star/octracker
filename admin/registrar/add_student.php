@@ -10,7 +10,12 @@ require_once "../includes/requirements_config.php";
 requireRoles(['Registrar', 'Admin', 'Super Admin'], '../../login.php?role=staff');
 
 $isHead = ($_SESSION['role'] === 'Admin');
-$roleLabel = $isHead ? 'Registrar Head' : ($_SESSION['role'] === 'Super Admin' ? 'Super Admin' : 'Registrar Staff');
+$isSuperAdmin = ($_SESSION['role'] === 'Super Admin');
+$roleLabel = $isHead ? 'Registrar Head' : ($isSuperAdmin ? 'Super Admin' : 'Registrar Staff');
+// Super Admin must not use registrar dashboard.php (it kicks them to login)
+$dashboardUrl = $isSuperAdmin
+    ? '../dashboard.php'
+    : ($isHead ? 'dashboard.php?mode=head' : 'dashboard.php');
 
 function tableExists(PDO $conn, string $table): bool
 {
@@ -369,12 +374,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         <img src="../../assets/images/logo.png" class="sidebar-logo">
         <h2>OCTRacker</h2>
         <p><?php echo htmlspecialchars($roleLabel); ?></p>
-        <a href="dashboard.php">🏠 Dashboard</a>
-        <a href="reports.php?type=college">📊 Reports</a>
-        <?php if ($isHead): ?>
-            <a href="history_report.php?mode=head">📜 History Report</a>
+        <a href="<?php echo htmlspecialchars($dashboardUrl); ?>">🏠 Dashboard</a>
+        <?php if ($isSuperAdmin): ?>
+            <a href="../students.php?track=college">🎓 College Students</a>
+            <a href="../students.php?track=shs">🎓 SHS Students</a>
+            <a href="../users.php">👥 User Management</a>
+        <?php else: ?>
+            <a href="reports.php?type=college">📊 Reports</a>
+            <?php if ($isHead): ?>
+                <a href="history_report.php?mode=head">📜 History Report</a>
+            <?php endif; ?>
+            <a href="archive.php?type=college<?php echo $isHead ? '&mode=head' : ''; ?>">🗂️ Archive</a>
         <?php endif; ?>
-        <a href="archive.php?type=college<?php echo $isHead ? '&mode=head' : ''; ?>">🗂️ Archive</a>
         <a href="add_student.php" class="active">➕ Add Student</a>
         <div class="sidebar-bottom">
             <a href="../../logout.php" onclick="return confirm('Are you sure you want to logout?');">🚪 Logout</a>
@@ -386,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         <p>Welcome, <strong><?php echo htmlspecialchars($_SESSION['fullname']); ?></strong></p>
 
         <div style="margin:15px 0 25px;">
-            <a href="dashboard.php" class="secondary-btn" style="display:inline-block;">
+            <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="secondary-btn" style="display:inline-block;">
                 ← Back to Dashboard
             </a>
         </div>
@@ -468,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
             </div>
 
             <div class="action-row">
-                <a href="dashboard.php" class="secondary-btn">Cancel</a>
+                <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="secondary-btn">Cancel</a>
                 <button type="submit" name="save_student" class="primary-btn">Add Student</button>
             </div>
         </form>

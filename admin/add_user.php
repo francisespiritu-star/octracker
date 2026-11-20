@@ -113,12 +113,18 @@ required>
 <div class="input-box">
 
 <input 
+id="addUserPassword"
 type="password"
 name="password"
 placeholder="Password"
 required>
 
 </div>
+
+<label style="display:flex; align-items:center; gap:8px; margin:4px 0 14px; color:#fff; cursor:pointer; font-size:14px;">
+<input type="checkbox" id="toggleAddUserPassword" style="width:16px; height:16px;">
+Show password
+</label>
 
 <div class="input-box">
 
@@ -158,6 +164,12 @@ Create Account
 
 </div>
 
+<script>
+document.getElementById('toggleAddUserPassword')?.addEventListener('change', function () {
+    var input = document.getElementById('addUserPassword');
+    if (input) input.type = this.checked ? 'text' : 'password';
+});
+</script>
 </body>
 
 </html>

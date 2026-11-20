@@ -212,6 +212,7 @@ required>
 
 
 <input 
+id="loginPassword"
 type="password"
 name="password"
 placeholder="Password"
@@ -219,6 +220,11 @@ required>
 
 
 </div>
+
+<label style="display:flex; align-items:center; gap:8px; margin:8px 0 14px; color:#fff; cursor:pointer; font-size:14px;">
+<input type="checkbox" id="toggleLoginPassword" style="width:16px; height:16px;">
+Show password
+</label>
 
 
 
@@ -275,6 +281,12 @@ Olivarez College Tagaytay
 
 
 
+<script>
+document.getElementById('toggleLoginPassword')?.addEventListener('change', function () {
+    var input = document.getElementById('loginPassword');
+    if (input) input.type = this.checked ? 'text' : 'password';
+});
+</script>
 </body>
 
 

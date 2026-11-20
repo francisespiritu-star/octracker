@@ -103,9 +103,14 @@ if(isset($_POST['reset_password'])){
 
 <div class="input-box">
 
-<input type="password" name="password" placeholder="New Password" required minlength="8" autocomplete="new-password">
+<input id="resetPassword" type="password" name="password" placeholder="New Password" required minlength="8" autocomplete="new-password">
 
 </div>
+
+<label style="display:flex; align-items:center; gap:8px; margin:4px 0 14px; color:#fff; cursor:pointer; font-size:14px;">
+<input type="checkbox" id="toggleResetPassword" style="width:16px; height:16px;">
+Show password
+</label>
 
 <p style="color:#f8f9fa;font-size:0.9rem;margin:8px 0 16px;">Must be at least 8 characters with uppercase, lowercase, and a number.</p>
 
@@ -119,6 +124,12 @@ if(isset($_POST['reset_password'])){
 
 </div>
 
+<script>
+document.getElementById('toggleResetPassword')?.addEventListener('change', function () {
+    var input = document.getElementById('resetPassword');
+    if (input) input.type = this.checked ? 'text' : 'password';
+});
+</script>
 </body>
 
 </html>
