@@ -1,23 +1,16 @@
-FROM php:8.2-apache
+FROM php:8.2-cli
 
-RUN docker-php-ext-install pdo pdo_mysql \
-    && a2enmod rewrite
+RUN docker-php-ext-install pdo pdo_mysql
 
-# Railway sets PORT; Apache must listen on it
-ENV APACHE_DOCUMENT_ROOT=/var/www/html
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
-    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
-
+WORKDIR /var/www/html
 COPY . /var/www/html/
 
 RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
     && find /var/www/html -type f -exec chmod 644 {} \;
 
-COPY docker/apache-ports.conf /etc/apache2/ports.conf
-COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
-COPY docker/start-apache.sh /usr/local/bin/start-apache.sh
-RUN chmod +x /usr/local/bin/start-apache.sh
-
+# Railway injects PORT; PHP built-in server avoids Apache MPM conflicts
+ENV PORT=8080
 EXPOSE 8080
-CMD ["start-apache.sh"]
+
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /var/www/html"]
