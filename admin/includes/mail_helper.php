@@ -43,7 +43,11 @@ function sendSmtpEmail(string $to, string $subject, string $body, string $from):
 {
     $host = mailEnv('SMTP_HOST');
     $user = mailEnv('SMTP_USER');
+    // Gmail app passwords are often copied with spaces — strip them
     $pass = mailEnv('SMTP_PASS');
+    if ($pass !== null) {
+        $pass = preg_replace('/\s+/', '', $pass) ?? $pass;
+    }
     $port = (int) (mailEnv('SMTP_PORT', '587') ?? '587');
     $secure = strtolower((string) (mailEnv('SMTP_SECURE') ?? ''));
 
