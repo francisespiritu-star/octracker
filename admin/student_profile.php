@@ -121,13 +121,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_requirements']))
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
     $fullName = trim((string) ($_POST['full_name'] ?? ''));
     $studentNumber = trim((string) ($_POST['student_number'] ?? ''));
+    $email = normalizeStudentEmail((string) ($_POST['email'] ?? ''));
     $program = trim((string) ($_POST['program'] ?? ''));
     $yearLevel = trim((string) ($_POST['year_level'] ?? ''));
     $section = trim((string) ($_POST['section'] ?? ''));
     $status = trim((string) ($_POST['student_status'] ?? 'Regular'));
 
-    $existingEmail = trim((string) ($student['email'] ?? ''));
-    $validationError = validateStudentNumberAndEmail($conn, $studentNumber, $existingEmail, $studentId, $existingEmail !== '');
+    $validationError = validateStudentNumberAndEmail($conn, $studentNumber, $email, $studentId, true);
 
     if ($fullName === '') {
         $message = 'Student full name is required.';
@@ -137,8 +137,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         $messageType = 'error';
         $editMode = true;
     } else {
-        $updateStmt = $conn->prepare("UPDATE `students` SET fullname = ?, full_name = ?, student_number = ?, program = ?, year_level = ?, section = ?, student_status = ? WHERE id = ?");
-        $updated = $updateStmt->execute([$fullName, $fullName, $studentNumber, $program, $yearLevel, $section, $status !== '' ? $status : 'Regular', $studentId]);
+        $updateStmt = $conn->prepare("UPDATE `students` SET fullname = ?, full_name = ?, student_number = ?, email = ?, program = ?, year_level = ?, section = ?, student_status = ? WHERE id = ?");
+        $updated = $updateStmt->execute([$fullName, $fullName, $studentNumber, $email, $program, $yearLevel, $section, $status !== '' ? $status : 'Regular', $studentId]);
 
         if ($updated) {
             logActivity($conn, $_SESSION['fullname'] ?? 'Unknown', $_SESSION['role'] ?? 'Unknown', 'updated student profile', 'Updated student #' . $studentId . ' (' . $fullName . ')');
@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
             $selectedRequirements = array_values(array_filter(array_map('trim', (array) ($_POST['requirements'] ?? []))));
             syncStudentRequirements($conn, $studentId, $requiredDocuments, $selectedRequirements);
 
-            $stmt = $conn->prepare("SELECT id, fullname, full_name, student_number, program, year_level, section, student_status, created_at FROM `students` WHERE id = ?");
+            $stmt = $conn->prepare("SELECT id, fullname, full_name, student_number, email, program, year_level, section, student_status, created_at FROM `students` WHERE id = ?");
             $stmt->execute([$studentId]);
             $student = $stmt->fetch(PDO::FETCH_ASSOC);
             $message = 'Student profile updated successfully.';
@@ -343,6 +343,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student']) && $s
                         <div>
                             <label style="display:block; margin-bottom:6px; font-weight:600;">Student Number</label>
                             <input type="text" name="student_number" value="<?php echo htmlspecialchars($student['student_number'] ?? ''); ?>" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff;">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
+                            <input type="email" name="email" value="<?php echo htmlspecialchars($student['email'] ?? ''); ?>" placeholder="name@olivarezcollegetagaytay.edu.ph" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff;">
+                            <small style="opacity:.8;">Use @olivarezcollege.edu.ph or @olivarezcollegetagaytay.edu.ph</small>
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:6px; font-weight:600;">Program</label>
