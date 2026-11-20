@@ -39,6 +39,25 @@ function mailEnv(string $key, ?string $default = null): ?string
 }
 
 /**
+ * Parse "Name <email@domain>" or plain "email@domain".
+ *
+ * @return array{email:string,name:string}
+ */
+function parseMailAddress(string $value, string $defaultName = 'OCTRacker'): array
+{
+    $value = trim($value);
+    if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
+        $name = trim($m[1], " \t\"'");
+        $email = trim($m[2]);
+        return [
+            'email' => $email,
+            'name' => $name !== '' ? $name : $defaultName,
+        ];
+    }
+    return ['email' => $value, 'name' => $defaultName];
+}
+
+/**
  * @return array{ok:bool,message:string}
  */
 function sendResendEmail(string $to, string $subject, string $body, string $from): array
@@ -96,9 +115,14 @@ function sendBrevoApiEmail(string $to, string $subject, string $body, string $fr
         return ['ok' => false, 'message' => 'BREVO_API_KEY is not set.'];
     }
 
-    $fromEmail = mailEnv('BREVO_FROM', $from) ?? $from;
+    $rawFrom = mailEnv('BREVO_FROM', $from) ?? $from;
+    $parsed = parseMailAddress($rawFrom, 'OCTRacker');
+    if ($parsed['email'] === '' || !filter_var($parsed['email'], FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'message' => 'BREVO_FROM must be a verified email (e.g. OCTracker <you@gmail.com>).'];
+    }
+
     $payload = json_encode([
-        'sender' => ['email' => $fromEmail, 'name' => 'OCTRacker'],
+        'sender' => ['email' => $parsed['email'], 'name' => $parsed['name']],
         'to' => [['email' => $to]],
         'subject' => $subject,
         'textContent' => $body,
