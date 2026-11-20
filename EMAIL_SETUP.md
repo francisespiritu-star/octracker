@@ -1,35 +1,33 @@
-# Email / SMTP setup (Railway)
+# Email setup (Railway)
 
-OCTRacker sends mail through `admin/includes/mail_helper.php`.
+Railway often **blocks Gmail SMTP** (`Connection timed out` on port 587/465).
+Use an **HTTPS email API** instead.
 
-## Railway variables (octracker service)
+## Recommended: Resend (free tier)
 
-Add these under **Variables**:
+1. Sign up at https://resend.com  
+2. Create an API key  
+3. For quick tests, Resend allows: `OCTRacker <onboarding@resend.dev>`  
+   (may only send to your own signup email until you verify a domain)  
+4. Railway → **octracker → Variables**:
 
-| Name | Example |
-|------|---------|
-| `SMTP_HOST` | `smtp-relay.brevo.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_USER` | your Brevo/Gmail/SendGrid username |
-| `SMTP_PASS` | your SMTP key / app password |
-| `SMTP_FROM` | a verified sender, e.g. `you@gmail.com` |
-| `SMTP_SECURE` | `tls` (default for 587) |
+| Name | Value |
+|------|--------|
+| `RESEND_API_KEY` | `re_...` |
+| `RESEND_FROM` | `OCTRacker <onboarding@resend.dev>` |
 
-Redeploy after saving variables.
+5. Redeploy and test **Send Email**
 
-## Free provider options
+You can leave the Gmail `SMTP_*` vars in place; Resend is tried first.
 
-### Brevo (Sendinblue)
-1. Sign up at https://www.brevo.com  
-2. SMTP & API → SMTP  
-3. Use their host/user/key as above  
+## Alternative: Brevo API
 
-### Gmail
-1. Google Account → App passwords (2FA required)  
-2. `SMTP_HOST=smtp.gmail.com`  
-3. `SMTP_PORT=587`  
-4. `SMTP_USER=you@gmail.com`  
-5. `SMTP_PASS=` the 16-character app password  
-6. `SMTP_FROM=you@gmail.com`  
+| Name | Value |
+|------|--------|
+| `BREVO_API_KEY` | your Brevo API key |
+| `BREVO_FROM` | a verified sender email |
 
-Without SMTP vars, **Send Email** falls back to **Open in Email App** (mailto).
+## Gmail SMTP (often fails on Railway)
+
+`SMTP_HOST=smtp.gmail.com`, port `587` / `465` — may time out on Railway.
+Keep **Open in Email App** as the demo fallback.

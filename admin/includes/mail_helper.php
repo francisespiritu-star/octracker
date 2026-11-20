@@ -1,15 +1,19 @@
 <?php
 
 /**
- * Mail helper: SMTP (preferred) → PHP mail() → mailto: fallback.
+ * Mail helper: Resend/Brevo HTTP API → SMTP → PHP mail() → mailto fallback.
  *
- * Railway / production — set these env vars:
- *   SMTP_HOST   e.g. smtp-relay.brevo.com / smtp.gmail.com / smtp.sendgrid.net
- *   SMTP_PORT   e.g. 587
- *   SMTP_USER   SMTP username / API user
- *   SMTP_PASS   SMTP password / API key
- *   SMTP_FROM   e.g. noreply@yourdomain.com (or verified sender)
- *   SMTP_SECURE tls|ssl|none  (default tls for 587, ssl for 465)
+ * Railway often blocks outbound SMTP (Gmail :587 times out). Prefer HTTPS APIs:
+ *
+ *   RESEND_API_KEY   from https://resend.com (free tier)
+ *   RESEND_FROM      e.g. OCTRacker <onboarding@resend.dev> for tests
+ *                    or a verified domain sender
+ *
+ *   BREVO_API_KEY    from Brevo SMTP & API → API keys
+ *   BREVO_FROM       verified sender email
+ *
+ * SMTP (may fail on Railway):
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE
  */
 
 function buildMailtoLink(string $to, string $subject, string $body): string
@@ -35,23 +39,118 @@ function mailEnv(string $key, ?string $default = null): ?string
 }
 
 /**
+ * @return array{ok:bool,message:string}
+ */
+function sendResendEmail(string $to, string $subject, string $body, string $from): array
+{
+    $apiKey = mailEnv('RESEND_API_KEY');
+    if ($apiKey === null) {
+        return ['ok' => false, 'message' => 'RESEND_API_KEY is not set.'];
+    }
+
+    $from = mailEnv('RESEND_FROM', $from) ?? $from;
+    $payload = json_encode([
+        'from' => $from,
+        'to' => [$to],
+        'subject' => $subject,
+        'text' => $body,
+    ], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+    ]);
+    $response = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $error = curl_error($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($errno) {
+        return ['ok' => false, 'message' => 'Resend request failed: ' . $error];
+    }
+
+    $decoded = json_decode((string) $response, true);
+    if ($status >= 200 && $status < 300) {
+        return ['ok' => true, 'message' => 'Email sent to ' . $to . ' via Resend.'];
+    }
+
+    $detail = is_array($decoded) ? (string) ($decoded['message'] ?? $response) : (string) $response;
+    return ['ok' => false, 'message' => 'Resend error (' . $status . '): ' . $detail];
+}
+
+/**
+ * @return array{ok:bool,message:string}
+ */
+function sendBrevoApiEmail(string $to, string $subject, string $body, string $from): array
+{
+    $apiKey = mailEnv('BREVO_API_KEY');
+    if ($apiKey === null) {
+        return ['ok' => false, 'message' => 'BREVO_API_KEY is not set.'];
+    }
+
+    $fromEmail = mailEnv('BREVO_FROM', $from) ?? $from;
+    $payload = json_encode([
+        'sender' => ['email' => $fromEmail, 'name' => 'OCTRacker'],
+        'to' => [['email' => $to]],
+        'subject' => $subject,
+        'textContent' => $body,
+    ], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'api-key: ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ],
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+    ]);
+    $response = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $error = curl_error($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($errno) {
+        return ['ok' => false, 'message' => 'Brevo request failed: ' . $error];
+    }
+    if ($status >= 200 && $status < 300) {
+        return ['ok' => true, 'message' => 'Email sent to ' . $to . ' via Brevo.'];
+    }
+
+    $decoded = json_decode((string) $response, true);
+    $detail = is_array($decoded) ? (string) ($decoded['message'] ?? json_encode($decoded)) : (string) $response;
+    return ['ok' => false, 'message' => 'Brevo error (' . $status . '): ' . $detail];
+}
+
+/**
  * Minimal SMTP client (AUTH LOGIN + STARTTLS/SSL).
  *
  * @return array{ok:bool,message:string}
  */
-function sendSmtpEmail(string $to, string $subject, string $body, string $from): array
+function sendSmtpEmail(string $to, string $subject, string $body, string $from, ?int $forcePort = null, ?string $forceSecure = null): array
 {
     $host = mailEnv('SMTP_HOST');
     $user = mailEnv('SMTP_USER');
-    // Gmail app passwords are often copied with spaces — strip them
     $pass = mailEnv('SMTP_PASS');
     if ($pass !== null) {
         $pass = preg_replace('/\s+/', '', $pass) ?? $pass;
     }
-    $port = (int) (mailEnv('SMTP_PORT', '587') ?? '587');
-    $secure = strtolower((string) (mailEnv('SMTP_SECURE') ?? ''));
+    $port = $forcePort ?? (int) (mailEnv('SMTP_PORT', '587') ?? '587');
+    $secure = strtolower((string) ($forceSecure ?? mailEnv('SMTP_SECURE') ?? ''));
 
-    if ($host === null || $user === null || $pass === null) {
+    if ($host === null || $user === null || $pass === null || $pass === '') {
         return ['ok' => false, 'message' => 'SMTP is not configured.'];
     }
 
@@ -62,12 +161,12 @@ function sendSmtpEmail(string $to, string $subject, string $body, string $from):
     $remote = ($secure === 'ssl' ? 'ssl://' : '') . $host . ':' . $port;
     $errno = 0;
     $errstr = '';
-    $socket = @stream_socket_client($remote, $errno, $errstr, 20, STREAM_CLIENT_CONNECT);
+    $socket = @stream_socket_client($remote, $errno, $errstr, 12, STREAM_CLIENT_CONNECT);
     if (!$socket) {
-        return ['ok' => false, 'message' => 'Could not connect to SMTP server: ' . $errstr];
+        return ['ok' => false, 'message' => 'Could not connect to SMTP server: ' . ($errstr !== '' ? $errstr : 'timeout')];
     }
 
-    stream_set_timeout($socket, 20);
+    stream_set_timeout($socket, 15);
 
     $read = static function () use ($socket): string {
         $data = '';
@@ -92,21 +191,18 @@ function sendSmtpEmail(string $to, string $subject, string $body, string $from):
         return null;
     };
 
-    $greeting = $read();
-    if ($err = $expect($greeting, '220')) {
+    if ($err = $expect($read(), '220')) {
         return ['ok' => false, 'message' => 'SMTP greeting failed: ' . $err];
     }
 
     $write('EHLO octracker.local');
-    $ehlo = $read();
-    if ($err = $expect($ehlo, '250')) {
+    if ($err = $expect($read(), '250')) {
         return ['ok' => false, 'message' => 'SMTP EHLO failed: ' . $err];
     }
 
     if ($secure === 'tls') {
         $write('STARTTLS');
-        $tls = $read();
-        if ($err = $expect($tls, '220')) {
+        if ($err = $expect($read(), '220')) {
             return ['ok' => false, 'message' => 'SMTP STARTTLS failed: ' . $err];
         }
         if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
@@ -114,25 +210,21 @@ function sendSmtpEmail(string $to, string $subject, string $body, string $from):
             return ['ok' => false, 'message' => 'SMTP TLS negotiation failed.'];
         }
         $write('EHLO octracker.local');
-        $ehlo2 = $read();
-        if ($err = $expect($ehlo2, '250')) {
+        if ($err = $expect($read(), '250')) {
             return ['ok' => false, 'message' => 'SMTP EHLO after TLS failed: ' . $err];
         }
     }
 
     $write('AUTH LOGIN');
-    $auth = $read();
-    if ($err = $expect($auth, '334')) {
+    if ($err = $expect($read(), '334')) {
         return ['ok' => false, 'message' => 'SMTP AUTH rejected: ' . $err];
     }
     $write(base64_encode($user));
-    $userResp = $read();
-    if ($err = $expect($userResp, '334')) {
+    if ($err = $expect($read(), '334')) {
         return ['ok' => false, 'message' => 'SMTP username rejected: ' . $err];
     }
     $write(base64_encode($pass));
-    $passResp = $read();
-    if ($err = $expect($passResp, '235')) {
+    if ($err = $expect($read(), '235')) {
         return ['ok' => false, 'message' => 'SMTP login failed (check SMTP_USER / SMTP_PASS).'];
     }
 
@@ -193,47 +285,60 @@ function sendAppEmail(string $to, string $subject, string $body, string $from = 
         ];
     }
 
-    // 1) SMTP when configured (Railway / production)
+    $mailto = buildMailtoLink($to, $subject, $body);
+
+    // 1) HTTPS APIs (work on Railway; SMTP ports are often blocked)
+    if (mailEnv('RESEND_API_KEY')) {
+        $resend = sendResendEmail($to, $subject, $body, $from);
+        if ($resend['ok']) {
+            return ['ok' => true, 'method' => 'resend', 'message' => $resend['message'], 'mailto' => null];
+        }
+        return ['ok' => false, 'method' => 'mailto', 'message' => $resend['message'] . ' Use the email app link below as a fallback.', 'mailto' => $mailto];
+    }
+
+    if (mailEnv('BREVO_API_KEY')) {
+        $brevo = sendBrevoApiEmail($to, $subject, $body, $from);
+        if ($brevo['ok']) {
+            return ['ok' => true, 'method' => 'brevo', 'message' => $brevo['message'], 'mailto' => null];
+        }
+        return ['ok' => false, 'method' => 'mailto', 'message' => $brevo['message'] . ' Use the email app link below as a fallback.', 'mailto' => $mailto];
+    }
+
+    // 2) SMTP — try configured port, then Gmail 465 SSL fallback
     if (mailEnv('SMTP_HOST') && mailEnv('SMTP_USER') && mailEnv('SMTP_PASS')) {
         $smtp = sendSmtpEmail($to, $subject, $body, $from);
-        if ($smtp['ok']) {
-            return [
-                'ok' => true,
-                'method' => 'smtp',
-                'message' => $smtp['message'],
-                'mailto' => null,
-            ];
+        if (!$smtp['ok'] && stripos((string) mailEnv('SMTP_HOST'), 'gmail') !== false) {
+            $smtp = sendSmtpEmail($to, $subject, $body, $from, 465, 'ssl');
         }
-        // Fall through to mailto with SMTP error shown
-        $mailto = buildMailtoLink($to, $subject, $body);
+        if ($smtp['ok']) {
+            return ['ok' => true, 'method' => 'smtp', 'message' => $smtp['message'], 'mailto' => null];
+        }
+
+        $hint = $smtp['message'];
+        if (stripos($hint, 'timed out') !== false || stripos($hint, 'Connection') !== false) {
+            $hint .= ' Railway often blocks Gmail SMTP ports. Add RESEND_API_KEY (https://resend.com) instead.';
+        }
+
         return [
             'ok' => false,
             'method' => 'mailto',
-            'message' => $smtp['message'] . ' Use the email app link below as a fallback.',
+            'message' => $hint . ' Use the email app link below as a fallback.',
             'mailto' => $mailto,
         ];
     }
 
-    // 2) PHP mail() (rarely works on XAMPP / many hosts)
+    // 3) PHP mail()
     $headers = 'From: ' . $from . "\r\n"
         . 'Reply-To: ' . $from . "\r\n"
         . "Content-Type: text/plain; charset=UTF-8\r\n";
-    $sent = @mail($to, $subject, wordwrap($body, 70), $headers);
-    if ($sent) {
-        return [
-            'ok' => true,
-            'method' => 'mail',
-            'message' => 'Email sent to ' . $to . '.',
-            'mailto' => null,
-        ];
+    if (@mail($to, $subject, wordwrap($body, 70), $headers)) {
+        return ['ok' => true, 'method' => 'mail', 'message' => 'Email sent to ' . $to . '.', 'mailto' => null];
     }
 
-    // 3) Mailto fallback for demos / local
-    $mailto = buildMailtoLink($to, $subject, $body);
     return [
         'ok' => false,
         'method' => 'mailto',
-        'message' => 'Outgoing email is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM on Railway (or use the email app link below).',
+        'message' => 'Outgoing email is not configured. On Railway use RESEND_API_KEY (recommended) or SMTP vars. Or use the email app link below.',
         'mailto' => $mailto,
     ];
 }
