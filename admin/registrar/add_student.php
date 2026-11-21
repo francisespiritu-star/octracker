@@ -264,10 +264,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
             grid-column: 1 / -1;
         }
 
-        .field-email .email-hint {
-            font-weight: 500;
-            font-size: 12px;
-            color: rgba(255,255,255,.7);
+        .email-input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .email-input-wrapper input#email_local {
+            width: 100%;
+            box-sizing: border-box;
+            padding-right: 210px;
+        }
+
+        .email-input-wrapper .email-suffix {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,.8);
+            font-size: 14px;
+            font-weight: 600;
+            pointer-events: none;
+            white-space: nowrap;
         }
 
         .field input[type="text"],
@@ -284,6 +301,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         @media (max-width: 700px) {
             .name-fields {
                 grid-template-columns: 1fr;
+            }
+
+            .email-input-wrapper input#email_local {
+                padding-right: 12px;
+                padding-bottom: 34px;
+            }
+
+            .email-input-wrapper .email-suffix {
+                right: 12px;
+                top: auto;
+                bottom: 10px;
+                transform: none;
+                font-size: 12px;
             }
         }
 
@@ -420,9 +450,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                 </div>
 
                 <div class="field field-email">
-                    <label for="email">Student Email</label>
-                    <input type="email" id="email" name="email" value="<?php echo htmlspecialchars((string) ($_POST['email'] ?? '')); ?>" placeholder="charlie.penano@olivarezcollege.edu.ph" autocomplete="email" required>
-                    <span class="email-hint">Use @olivarezcollege.edu.ph or @olivarezcollegetagaytay.edu.ph</span>
+                    <label for="email_local">Student Email</label>
+                    <?php
+                    $postedEmail = (string) ($_POST['email'] ?? '');
+                    $emailLocalValue = preg_replace('/@olivarezcollege\.edu\.ph$/i', '', $postedEmail) ?? $postedEmail;
+                    if ($emailLocalValue === $postedEmail && strpos($postedEmail, '@') !== false) {
+                        $emailLocalValue = '';
+                    }
+                    ?>
+                    <div class="email-input-wrapper">
+                        <input type="text" id="email_local" name="email_local" value="<?php echo htmlspecialchars($emailLocalValue); ?>" placeholder="" autocomplete="off" required>
+                        <span class="email-suffix">@olivarezcollege.edu.ph</span>
+                    </div>
+                    <input type="hidden" id="email" name="email" value="<?php echo htmlspecialchars($postedEmail); ?>">
                 </div>
 
                 <div class="field">
@@ -472,5 +512,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         </form>
     </div>
 </div>
+<script>
+    (function() {
+        var localInput = document.getElementById('email_local');
+        var hiddenEmail = document.getElementById('email');
+        var domain = '@olivarezcollege.edu.ph';
+
+        function syncEmail() {
+            var localValue = localInput.value.trim();
+            if (localValue.indexOf('@') !== -1) {
+                hiddenEmail.value = localValue;
+            } else {
+                hiddenEmail.value = localValue ? localValue + domain : '';
+            }
+        }
+
+        localInput.addEventListener('input', syncEmail);
+        localInput.addEventListener('blur', syncEmail);
+        syncEmail();
+    })();
+</script>
 </body>
 </html>

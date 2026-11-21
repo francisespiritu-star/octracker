@@ -4,17 +4,7 @@
  * Shared student number / email validation helpers.
  */
 
-const OLIVAREZ_EMAIL_DOMAINS = [
-    'olivarezcollege.edu.ph',
-    'olivarezcollegetagaytay.edu.ph',
-];
-
-function olivarezEmailDomainPattern(): string
-{
-    return '(?:' . implode('|', array_map(static function (string $domain): string {
-        return preg_quote($domain, '/');
-    }, OLIVAREZ_EMAIL_DOMAINS)) . ')';
-}
+const OLIVAREZ_STUDENT_EMAIL_DOMAIN = 'olivarezcollege.edu.ph';
 
 function normalizeStudentEmail(string $email): string
 {
@@ -24,7 +14,7 @@ function normalizeStudentEmail(string $email): string
     }
 
     if (strpos($email, '@') === false) {
-        $email .= '@' . OLIVAREZ_EMAIL_DOMAINS[0];
+        $email .= '@' . OLIVAREZ_STUDENT_EMAIL_DOMAIN;
     }
 
     return $email;
@@ -37,7 +27,7 @@ function isValidOlivarezStudentEmail(string $email): bool
         return false;
     }
 
-    return (bool) preg_match('/@' . olivarezEmailDomainPattern() . '$/i', $email);
+    return (bool) preg_match('/@' . preg_quote(OLIVAREZ_STUDENT_EMAIL_DOMAIN, '/') . '$/i', $email);
 }
 
 function studentNumberExists(PDO $conn, string $studentNumber, ?int $excludeStudentId = null): bool
@@ -102,7 +92,7 @@ function validateStudentNumberAndEmail(
     }
 
     if ($email !== '' && !isValidOlivarezStudentEmail($email)) {
-        return 'Enter a valid Olivarez College email (@olivarezcollege.edu.ph or @olivarezcollegetagaytay.edu.ph).';
+        return 'Enter a valid Olivarez College email (example@olivarezcollege.edu.ph).';
     }
 
     if ($email !== '' && studentEmailExists($conn, $email, $excludeStudentId)) {
