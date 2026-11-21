@@ -260,37 +260,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
             box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.12);
         }
 
+        .field-email {
+            grid-column: 1 / -1;
+        }
+
         .email-input-wrapper {
-            display: flex;
-            align-items: stretch;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.2fr);
+            gap: 10px;
             width: 100%;
         }
 
-        .email-input-wrapper input {
-            flex: 1 1 auto;
+        .email-input-wrapper input#email_local {
+            width: 100%;
             min-width: 0;
-            width: auto;
-            padding-right: 12px;
+            box-sizing: border-box;
         }
 
-        .email-input-wrapper .email-domain {
-            flex: 0 1 auto;
-            width: auto;
-            max-width: 58%;
+        .email-input-wrapper select#email_domain.email-domain {
+            width: 100%;
+            max-width: none;
             min-width: 0;
+            box-sizing: border-box;
             padding: 10px 12px;
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,.18);
             background: rgba(255,255,255,.08);
             color: #f4f8ff;
-            font-size: 13px;
+            font-size: 14px;
             outline: none;
             cursor: pointer;
             appearance: auto;
+            position: static;
+            transform: none;
+            pointer-events: auto;
         }
 
-        .email-input-wrapper .email-domain option {
+        .email-input-wrapper select#email_domain.email-domain option {
             color: #0f172a;
             background: #fff;
         }
@@ -312,11 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
             }
 
             .email-input-wrapper {
-                flex-direction: column;
-            }
-
-            .email-input-wrapper .email-domain {
-                max-width: 100%;
+                grid-template-columns: 1fr;
             }
         }
 
@@ -452,7 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                     <input type="text" id="student_number" name="student_number" value="<?php echo htmlspecialchars($_POST['student_number'] ?? ''); ?>" required>
                 </div>
 
-                <div class="field">
+                <div class="field field-email">
                     <label for="email_local">Student Email</label>
                     <?php
                     $postedEmail = (string) ($_POST['email'] ?? '');
@@ -466,7 +468,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                     }
                     ?>
                     <div class="email-input-wrapper">
-                        <input type="text" id="email_local" name="email_local" value="<?php echo htmlspecialchars($emailLocalValue); ?>" placeholder="username" autocomplete="off" required>
+                        <input type="text" id="email_local" name="email_local" value="<?php echo htmlspecialchars($emailLocalValue); ?>" placeholder="e.g. charlie.penano" autocomplete="off" required>
                         <select id="email_domain" name="email_domain" class="email-domain" aria-label="Email domain">
                             <option value="olivarezcollege.edu.ph" <?php echo $emailDomainValue === 'olivarezcollege.edu.ph' ? 'selected' : ''; ?>>@olivarezcollege.edu.ph</option>
                             <option value="olivarezcollegetagaytay.edu.ph" <?php echo $emailDomainValue === 'olivarezcollegetagaytay.edu.ph' ? 'selected' : ''; ?>>@olivarezcollegetagaytay.edu.ph</option>
