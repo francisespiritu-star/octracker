@@ -25,22 +25,12 @@ $roleLabel = $isHead ? 'Registrar Head' : 'Registrar Staff';
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 function columnExists(PDO $conn, string $table, string $column): bool
 {
-    try {
-        $stmt = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerColumnExists($conn, $table, $column);
 }
 
 $program = isset($_GET['program']) ? $_GET['program'] : 'IT';
@@ -60,7 +50,7 @@ foreach ($yearLevels as $year) {
 if (tableExists($conn, 'students')) {
     $studentColumns = [];
     try {
-        $studentColumns = $conn->query("SHOW COLUMNS FROM `students`")->fetchAll(PDO::FETCH_COLUMN);
+        $studentColumns = octrackerListColumns($conn, 'students');
     } catch (Throwable $e) {
         $studentColumns = [];
     }
@@ -99,15 +89,15 @@ if (tableExists($conn, 'students')) {
     }
 
     if ($nameColumn !== null && $programColumn !== null && in_array('id', $studentColumns, true)) {
-        $nameExpression = "`{$nameColumn}`";
+        $nameExpression = "{$nameColumn}";
         if (in_array('fullname', $studentColumns, true) && in_array('full_name', $studentColumns, true)) {
-            $nameExpression = "COALESCE(NULLIF(`fullname`, ''), `full_name`)";
+            $nameExpression = "COALESCE(NULLIF(fullname, ''), full_name)";
         }
-        $numberExpression = $studentNumberColumn !== null ? "`{$studentNumberColumn}`" : "''";
-        $yearExpression = $yearColumn !== null ? "`{$yearColumn}`" : "''";
-        $studentsSql = "SELECT `id`, {$nameExpression} AS student_name, {$numberExpression} AS student_number, {$yearExpression} AS year_level FROM `students` WHERE (`{$programColumn}` = :program OR `{$programColumn}` LIKE :program_like)";
+        $numberExpression = $studentNumberColumn !== null ? "{$studentNumberColumn}" : "''";
+        $yearExpression = $yearColumn !== null ? "{$yearColumn}" : "''";
+        $studentsSql = "SELECT id, {$nameExpression} AS student_name, {$numberExpression} AS student_number, {$yearExpression} AS year_level FROM students WHERE ({$programColumn} = :program OR {$programColumn} LIKE :program_like)";
         if ($archiveColumnAvailable) {
-            $studentsSql .= " AND `archived_at` IS NULL";
+            $studentsSql .= " AND archived_at IS NULL";
         }
         $studentsSql .= " ORDER BY student_name ASC";
         $studentsStmt = $conn->prepare($studentsSql);
@@ -120,12 +110,12 @@ if (tableExists($conn, 'students')) {
 
     if ($yearColumn !== null) {
         foreach ($yearLevels as $year) {
-            $baseSql = "SELECT COUNT(*) FROM `students` WHERE `{$yearColumn}` = :year_level";
+            $baseSql = "SELECT COUNT(*) FROM students WHERE {$yearColumn} = :year_level";
             if ($programColumn !== null) {
-                $baseSql .= " AND `{$programColumn}` = :program";
+                $baseSql .= " AND {$programColumn} = :program";
             }
             if ($archiveColumnAvailable) {
-                $baseSql .= " AND `archived_at` IS NULL";
+                $baseSql .= " AND archived_at IS NULL";
             }
 
             $studentStmt = $conn->prepare($baseSql);
@@ -138,12 +128,12 @@ if (tableExists($conn, 'students')) {
             $yearSummary[$year]['missing'] = $yearSummary[$year]['students'] * $requiredDocumentsPerStudent;
 
             if (tableExists($conn, 'student_requirements') && columnExists($conn, 'student_requirements', 'status')) {
-                $completedSql = "SELECT COUNT(DISTINCT sr.student_id, sr.requirement_name) FROM `student_requirements` sr JOIN `students` s ON sr.student_id = s.id WHERE s.`{$yearColumn}` = :year_level";
+                $completedSql = "SELECT COUNT(DISTINCT sr.student_id, sr.requirement_name) FROM student_requirements sr JOIN students s ON sr.student_id = s.id WHERE s.{$yearColumn} = :year_level";
                 if ($programColumn !== null) {
-                    $completedSql .= " AND s.`{$programColumn}` = :program";
+                    $completedSql .= " AND s.{$programColumn} = :program";
                 }
                 if ($archiveColumnAvailable) {
-                    $completedSql .= " AND s.`archived_at` IS NULL";
+                    $completedSql .= " AND s.archived_at IS NULL";
                 }
                 $completedSql .= " AND LOWER(sr.status) = 'completed'";
 

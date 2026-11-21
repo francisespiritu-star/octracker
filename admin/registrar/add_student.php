@@ -19,66 +19,12 @@ $dashboardUrl = $isSuperAdmin
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 function columnExists(PDO $conn, string $table, string $column): bool
 {
-    try {
-        $stmt = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
-}
-
-function ensureStudentsTable(PDO $conn): void
-{
-    $sql = "
-        CREATE TABLE IF NOT EXISTS `students` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `fullname` VARCHAR(255) NULL,
-            `full_name` VARCHAR(255) NULL,
-            `student_number` VARCHAR(100) NULL,
-            `email` VARCHAR(255) NULL,
-            `program` VARCHAR(150) NULL,
-            `year_level` VARCHAR(100) NULL,
-            `section` VARCHAR(100) NULL,
-            `student_status` VARCHAR(50) DEFAULT 'Regular',
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ";
-
-    $conn->exec($sql);
-
-    $requiredColumns = [
-        'fullname' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `fullname` VARCHAR(255) NULL",
-        'full_name' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `full_name` VARCHAR(255) NULL",
-        'student_number' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `student_number` VARCHAR(100) NULL",
-        'program' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `program` VARCHAR(150) NULL",
-        'year_level' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `year_level` VARCHAR(100) NULL",
-        'section' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `section` VARCHAR(100) NULL",
-        'email' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `email` VARCHAR(255) NULL",
-        'student_status' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `student_status` VARCHAR(50) DEFAULT 'Regular'",
-        'created_at' => "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-    ];
-
-    foreach ($requiredColumns as $column => $alterSql) {
-        if (columnExists($conn, 'students', $column)) {
-            continue;
-        }
-
-        try {
-            $conn->exec($alterSql);
-        } catch (Throwable $e) {
-            // Ignore harmless column-already-exists errors and continue.
-        }
-    }
+    return octrackerColumnExists($conn, $table, $column);
 }
 
 function addStudent(PDO $conn, array $data): bool
@@ -98,7 +44,7 @@ function addStudent(PDO $conn, array $data): bool
     $status = trim((string) ($data['student_status'] ?? 'Regular'));
 
     $stmt = $conn->prepare(
-        "INSERT INTO `students` (`fullname`, `full_name`, `student_number`, `email`, `program`, `year_level`, `section`, `student_status`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO students (fullname, full_name, student_number, email, program, year_level, section, student_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     );
 
     $inserted = $stmt->execute([
@@ -125,22 +71,14 @@ function addStudent(PDO $conn, array $data): bool
         }
 
         try {
-            $conn->prepare("CREATE TABLE IF NOT EXISTS `activity_log` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `actor_name` VARCHAR(255) NOT NULL,
-                `actor_role` VARCHAR(100) NOT NULL,
-                `action` VARCHAR(255) NOT NULL,
-                `details` TEXT NULL,
-                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )")->execute();
-
-            $logStmt = $conn->prepare("INSERT INTO `activity_log` (`actor_name`, `actor_role`, `action`, `details`) VALUES (?, ?, ?, ?)");
-            $logStmt->execute([
+            require_once __DIR__ . '/../includes/activity_log.php';
+            logActivity(
+                $conn,
                 $actorName,
                 $actorRole,
                 'added student',
                 'Added student #' . $studentId . ' (' . $fullName . ') via registrar add student form'
-            ]);
+            );
         } catch (Throwable $e) {
             // Ignore logging failures and keep student creation successful.
         }

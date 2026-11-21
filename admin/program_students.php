@@ -35,7 +35,7 @@ function buildProgramMatchParams(string $program): array
     $clauses = [];
     $params = [];
     foreach ($aliases as $alias) {
-        $clauses[] = '(`program` = ? OR `program` LIKE ? OR `program` LIKE ?)';
+        $clauses[] = '(program = ? OR program LIKE ? OR program LIKE ?)';
         $params[] = $alias;
         $params[] = $alias . ' %';
         $params[] = $alias . '-%';
@@ -45,12 +45,7 @@ function buildProgramMatchParams(string $program): array
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 $archiveNotice = (string) ($_SESSION['program_students_notice'] ?? '');
@@ -59,10 +54,10 @@ $archiveColumnAvailable = false;
 
 if (tableExists($conn, 'students')) {
     try {
-        $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+        $studentColumns = octrackerListColumns($conn, 'students');
         if (!in_array('archived_at', $studentColumns, true)) {
-            $conn->exec('ALTER TABLE `students` ADD COLUMN `archived_at` DATETIME NULL DEFAULT NULL');
-            $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+            ensureStudentsTable($conn);
+            $studentColumns = octrackerListColumns($conn, 'students');
         }
         $archiveColumnAvailable = in_array('archived_at', $studentColumns, true);
     } catch (Throwable $e) {
@@ -79,13 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['action'] ?? ''), 
 
     if ($action === 'promote_students' && $studentIds !== []) {
         $idPlaceholders = implode(',', array_fill(0, count($studentIds), '?'));
-        $selectSql = "SELECT id, year_level FROM `students` WHERE id IN ({$idPlaceholders}) AND {$programMatchSql}";
+        $selectSql = "SELECT id, year_level FROM students WHERE id IN ({$idPlaceholders}) AND {$programMatchSql}";
         if ($archiveColumnAvailable) {
-            $selectSql .= ' AND `archived_at` IS NULL';
+            $selectSql .= ' AND archived_at IS NULL';
         }
         $selectStmt = $conn->prepare($selectSql);
         $selectStmt->execute(array_merge($studentIds, $programMatchParams));
-        $updateStmt = $conn->prepare("UPDATE `students` SET `year_level` = ?, `section` = '' WHERE id = ? AND `year_level` = ?");
+        $updateStmt = $conn->prepare("UPDATE students SET year_level = ?, section = '' WHERE id = ? AND year_level = ?");
         $levels = $isShsProgram
             ? ['Grade 11', 'Grade 12']
             : ['1st Year', '2nd Year', '3rd Year', '4th Year'];
@@ -110,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_POST['action'] ?? ''), 
         $archivedCount = 0;
         if ($archiveColumnAvailable && $studentIds !== []) {
             $idPlaceholders = implode(',', array_fill(0, count($studentIds), '?'));
-            $archiveSql = "UPDATE `students` SET `archived_at` = NOW() WHERE id IN ({$idPlaceholders}) AND `archived_at` IS NULL AND {$programMatchSql}";
+            $archiveSql = "UPDATE students SET archived_at = NOW() WHERE id IN ({$idPlaceholders}) AND archived_at IS NULL AND {$programMatchSql}";
             $archiveStmt = $conn->prepare($archiveSql);
             $archiveStmt->execute(array_merge($studentIds, $programMatchParams));
             $archivedCount = $archiveStmt->rowCount();
@@ -144,7 +139,7 @@ function getRequirementStatus(PDO $conn, int $studentId): string
         return 'No Data';
     }
 
-    $stmt = $conn->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN LOWER(status) <> 'completed' THEN 1 ELSE 0 END) AS missing FROM `student_requirements` WHERE student_id = ?");
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN LOWER(status) <> 'completed' THEN 1 ELSE 0 END) AS missing FROM student_requirements WHERE student_id = ?");
     $stmt->execute([$studentId]);
     $summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -159,9 +154,9 @@ $students = [];
 $archivedStudents = [];
 [$programMatchSql, $programMatchParams] = buildProgramMatchParams($program);
 if (tableExists($conn, 'students')) {
-    $activeSql = "SELECT id, fullname, full_name, student_number, program, year_level, section, student_status FROM `students` WHERE {$programMatchSql}";
+    $activeSql = "SELECT id, fullname, full_name, student_number, program, year_level, section, student_status FROM students WHERE {$programMatchSql}";
     if ($archiveColumnAvailable) {
-        $activeSql .= ' AND `archived_at` IS NULL';
+        $activeSql .= ' AND archived_at IS NULL';
     }
     $activeSql .= ' ORDER BY fullname ASC';
     $stmt = $conn->prepare($activeSql);
@@ -175,8 +170,8 @@ if (tableExists($conn, 'students')) {
 
     if ($archiveColumnAvailable) {
         $archiveSql = "SELECT id, COALESCE(NULLIF(fullname, ''), full_name) AS full_name, student_number, year_level, section, archived_at
-            FROM `students`
-            WHERE {$programMatchSql} AND `archived_at` IS NOT NULL
+            FROM students
+            WHERE {$programMatchSql} AND archived_at IS NOT NULL
             ORDER BY archived_at DESC, full_name ASC";
         $archiveStmt = $conn->prepare($archiveSql);
         $archiveStmt->execute($programMatchParams);

@@ -20,7 +20,7 @@ $courseRequirementDetails = [];
 $bulkSendMessage = '';
 $requirementsTableReady = false;
 try {
-    $conn->exec("CREATE TABLE IF NOT EXISTS `student_requirements` (id INT AUTO_INCREMENT PRIMARY KEY, student_id INT NOT NULL, requirement_name VARCHAR(255) NOT NULL, status VARCHAR(30) NOT NULL DEFAULT 'missing', INDEX (student_id), INDEX (status))");
+    ensureStudentRequirementsTable($conn);
     $requirementsTableReady = true;
 } catch (Throwable $e) {
     $requirementsTableReady = false;
@@ -28,7 +28,8 @@ try {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_missing_bulk']) && $requirementsTableReady) {
     requireCsrf();
-    $bulkStmt = $conn->query("SELECT s.id, COALESCE(NULLIF(s.fullname, ''), s.full_name) AS full_name, s.email, GROUP_CONCAT(DISTINCT sr.requirement_name ORDER BY sr.requirement_name SEPARATOR ', ') AS missing_requirements FROM `students` s JOIN `student_requirements` sr ON sr.student_id = s.id WHERE sr.status = 'missing' GROUP BY s.id, full_name, s.email");
+    $agg = octrackerGroupConcatDistinctOrdered('sr.requirement_name', ', ', $conn);
+    $bulkStmt = $conn->query("SELECT s.id, COALESCE(NULLIF(s.fullname, ''), s.full_name) AS full_name, s.email, {$agg} AS missing_requirements FROM students s JOIN student_requirements sr ON sr.student_id = s.id WHERE sr.status = 'missing' GROUP BY s.id, s.fullname, s.full_name, s.email");
     $sent = 0;
     $skipped = 0;
     foreach ($bulkStmt->fetchAll(PDO::FETCH_ASSOC) as $recipient) {
@@ -69,8 +70,8 @@ if ($requirementsFilter !== '' && $requirementsTableReady) {
         $params[] = $requirementsFilter;
         $detailStmt = $conn->prepare(
             "SELECT DISTINCT sr.requirement_name
-             FROM `student_requirements` sr
-             JOIN `students` s ON sr.student_id = s.id
+             FROM student_requirements sr
+             JOIN students s ON sr.student_id = s.id
              WHERE (" . implode(' OR ', $clauses) . ")
                AND sr.status = ?
                AND sr.requirement_name IS NOT NULL AND sr.requirement_name <> ''

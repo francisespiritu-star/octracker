@@ -9,14 +9,7 @@ requireSuperAdmin();
 
 
 
-$conn->exec("CREATE TABLE IF NOT EXISTS system_settings (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    school_name VARCHAR(255) NOT NULL DEFAULT '',
-    system_name VARCHAR(255) NOT NULL DEFAULT '',
-    motto VARCHAR(255) NOT NULL DEFAULT '',
-    academic_year VARCHAR(20) NOT NULL DEFAULT '',
-    semester VARCHAR(50) NOT NULL DEFAULT ''
-)");
+ensureSystemSettingsTable($conn);
 
 $stmt=$conn->query("SELECT * FROM system_settings LIMIT 1");
 

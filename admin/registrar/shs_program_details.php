@@ -34,32 +34,27 @@ foreach ($sections as $section) {
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE " . $conn->quote($table));
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 $archiveFilter = '';
 try {
-    $cols = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+    $cols = octrackerListColumns($conn, 'students');
     if (in_array('archived_at', $cols, true)) {
-        $archiveFilter = ' AND `archived_at` IS NULL';
+        $archiveFilter = ' AND archived_at IS NULL';
     }
 } catch (Throwable $e) {
     $archiveFilter = '';
 }
 
-$programMatch = '(`program` = ? OR `program` LIKE ? OR `program` LIKE ?)';
+$programMatch = '(program = ? OR program LIKE ? OR program LIKE ?)';
 $programParams = [$program, $program . ' %', $program . '-%'];
 
 try {
     $studentsStmt = $conn->prepare(
         "SELECT id, student_number, section, year_level,
                 COALESCE(NULLIF(fullname, ''), full_name) AS student_name
-         FROM `students`
+         FROM students
          WHERE $programMatch" . $archiveFilter . "
          ORDER BY student_name ASC"
     );
@@ -72,8 +67,8 @@ try {
 foreach ($sections as $section) {
     try {
         $countStmt = $conn->prepare(
-            "SELECT COUNT(*) FROM `students`
-             WHERE $programMatch AND TRIM(`section`) = ?" . $archiveFilter
+            "SELECT COUNT(*) FROM students
+             WHERE $programMatch AND TRIM(section) = ?" . $archiveFilter
         );
         $countStmt->execute(array_merge($programParams, [$section]));
         $studentCount = (int) $countStmt->fetchColumn();
@@ -85,8 +80,8 @@ foreach ($sections as $section) {
 
         if (tableExists($conn, 'student_requirements')) {
             $completedStmt = $conn->prepare(
-                "SELECT COUNT(*) FROM `student_requirements` sr
-                 JOIN `students` s ON sr.student_id = s.id
+                "SELECT COUNT(*) FROM student_requirements sr
+                 JOIN students s ON sr.student_id = s.id
                  WHERE (s.program = ? OR s.program LIKE ? OR s.program LIKE ?)
                    AND TRIM(s.section) = ?
                    AND LOWER(sr.status) = 'completed'"
@@ -96,8 +91,8 @@ foreach ($sections as $section) {
             $completed = (int) $completedStmt->fetchColumn();
 
             $missingStmt = $conn->prepare(
-                "SELECT COUNT(*) FROM `student_requirements` sr
-                 JOIN `students` s ON sr.student_id = s.id
+                "SELECT COUNT(*) FROM student_requirements sr
+                 JOIN students s ON sr.student_id = s.id
                  WHERE (s.program = ? OR s.program LIKE ? OR s.program LIKE ?)
                    AND TRIM(s.section) = ?
                    AND LOWER(sr.status) = 'missing'"

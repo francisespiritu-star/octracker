@@ -59,14 +59,7 @@ $bulkMailtoLinks = [];
 $requirementsTableReady = false;
 
 try {
-    $conn->exec("CREATE TABLE IF NOT EXISTS `student_requirements` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        student_id INT NOT NULL,
-        requirement_name VARCHAR(255) NOT NULL,
-        status VARCHAR(30) NOT NULL DEFAULT 'missing',
-        INDEX (student_id),
-        INDEX (status)
-    )");
+    ensureStudentRequirementsTable($conn);
     $requirementsTableReady = true;
 } catch (Throwable $e) {
     $requirementsTableReady = false;
@@ -75,10 +68,10 @@ try {
 $archiveFilter = '';
 $archiveFilterPlain = '';
 try {
-    $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+    $studentColumns = octrackerListColumns($conn, 'students');
     if (in_array('archived_at', $studentColumns, true)) {
-        $archiveFilter = ' AND s.`archived_at` IS NULL';
-        $archiveFilterPlain = ' AND `archived_at` IS NULL';
+        $archiveFilter = ' AND s.archived_at IS NULL';
+        $archiveFilterPlain = ' AND archived_at IS NULL';
     }
 } catch (Throwable $e) {
     $archiveFilter = '';
@@ -96,12 +89,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_missing_bulk']) 
     $bulkCodes = $postType === 'shs' ? $shsProgramCodes : $collegeProgramCodes;
     [$bulkMatchSql, $bulkMatchParams] = buildProgramMatchSql($bulkCodes, 's.program');
 
+    $agg = octrackerGroupConcatDistinctOrdered('sr.requirement_name', ', ', $conn);
     $bulkSql = "SELECT s.id, COALESCE(NULLIF(s.fullname, ''), s.full_name) AS full_name, s.email,
-                       GROUP_CONCAT(DISTINCT sr.requirement_name ORDER BY sr.requirement_name SEPARATOR ', ') AS missing_requirements
-                FROM `students` s
-                JOIN `student_requirements` sr ON sr.student_id = s.id
+                       {$agg} AS missing_requirements
+                FROM students s
+                JOIN student_requirements sr ON sr.student_id = s.id
                 WHERE sr.status = 'missing' AND $bulkMatchSql" . $archiveFilter . "
-                GROUP BY s.id, full_name, s.email";
+                GROUP BY s.id, s.fullname, s.full_name, s.email";
     $bulkStmt = $conn->prepare($bulkSql);
     $bulkStmt->execute($bulkMatchParams);
 
@@ -157,8 +151,8 @@ if ($requirementsFilter !== '' && $requirementsTableReady) {
         [$courseSql, $courseParams] = buildProgramMatchSql($courseAliases, 's.program');
         $detailStmt = $conn->prepare(
             "SELECT DISTINCT sr.requirement_name
-             FROM `student_requirements` sr
-             JOIN `students` s ON sr.student_id = s.id
+             FROM student_requirements sr
+             JOIN students s ON sr.student_id = s.id
              WHERE $courseSql AND sr.status = ? AND sr.requirement_name IS NOT NULL AND sr.requirement_name <> ''" . $archiveFilter . "
              ORDER BY sr.requirement_name ASC"
         );
@@ -186,7 +180,7 @@ try {
             $aliases[] = 'BSIT';
         }
         [$codeSql, $codeParams] = buildProgramMatchSql($aliases, 'program');
-        $countStmt = $conn->prepare("SELECT COUNT(*) FROM `students` WHERE $codeSql" . $archiveFilterPlain);
+        $countStmt = $conn->prepare("SELECT COUNT(*) FROM students WHERE $codeSql" . $archiveFilterPlain);
         $countStmt->execute($codeParams);
         $studentCount = (int) $countStmt->fetchColumn();
         $programSummary[$code]['students'] = $studentCount;
@@ -199,8 +193,8 @@ try {
         [$codeSqlAliased, $codeParamsAliased] = buildProgramMatchSql($aliases, 's.program');
         $missingStudentsStmt = $conn->prepare(
             "SELECT COUNT(DISTINCT s.id)
-             FROM `students` s
-             JOIN `student_requirements` sr ON sr.student_id = s.id
+             FROM students s
+             JOIN student_requirements sr ON sr.student_id = s.id
              WHERE $codeSqlAliased AND LOWER(sr.status) = 'missing'" . $archiveFilter
         );
         $missingStudentsStmt->execute($codeParamsAliased);
@@ -210,8 +204,8 @@ try {
         $completeStudentsStmt = $conn->prepare(
             "SELECT COUNT(*) FROM (
                 SELECT s.id
-                FROM `students` s
-                JOIN `student_requirements` sr ON sr.student_id = s.id
+                FROM students s
+                JOIN student_requirements sr ON sr.student_id = s.id
                 WHERE $codeSqlAliased" . $archiveFilter . "
                 GROUP BY s.id
                 HAVING SUM(CASE WHEN LOWER(sr.status) = 'missing' THEN 1 ELSE 0 END) = 0
@@ -247,8 +241,8 @@ if ($selectedRequirement !== '' && $requirementsTableReady) {
                     s.student_number,
                     s.program,
                     COALESCE(NULLIF(s.year_level, ''), 'Not set') AS year_level
-             FROM `students` s
-             JOIN `student_requirements` sr ON sr.student_id = s.id
+             FROM students s
+             JOIN student_requirements sr ON sr.student_id = s.id
              WHERE LOWER(sr.status) = 'missing'
                AND LOWER(sr.requirement_name) = LOWER(?)
                AND $trackMatchSql" . $archiveFilter . "
@@ -290,8 +284,8 @@ if ($requirementsTableReady && $requiredDocuments !== []) {
         $placeholders = implode(',', array_fill(0, count($requiredDocuments), '?'));
         $reqCountStmt = $conn->prepare(
             "SELECT sr.requirement_name, COUNT(*) AS missing_count
-             FROM `student_requirements` sr
-             JOIN `students` s ON sr.student_id = s.id
+             FROM student_requirements sr
+             JOIN students s ON sr.student_id = s.id
              WHERE LOWER(sr.status) = 'missing'
                AND sr.requirement_name IN ($placeholders)
                AND $trackMatchSql" . $archiveFilter . "

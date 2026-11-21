@@ -22,10 +22,10 @@ $archiveColumnAvailable = false;
 $studentColumns = [];
 
 try {
-    $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+    $studentColumns = octrackerListColumns($conn, 'students');
     if (!in_array('archived_at', $studentColumns, true)) {
-        $conn->exec('ALTER TABLE `students` ADD COLUMN `archived_at` DATETIME NULL DEFAULT NULL');
-        $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+        ensureStudentsTable($conn);
+        $studentColumns = octrackerListColumns($conn, 'students');
     }
     $archiveColumnAvailable = in_array('archived_at', $studentColumns, true);
 } catch (Throwable $e) {
@@ -35,7 +35,7 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'restore_student' && $archiveColumnAvailable) {
     requireCsrf();
     $studentIdToRestore = (int) ($_POST['student_id'] ?? 0);
-    $restoreStmt = $conn->prepare('UPDATE `students` SET `archived_at` = NULL WHERE `id` = ? AND `archived_at` IS NOT NULL');
+    $restoreStmt = $conn->prepare('UPDATE students SET archived_at = NULL WHERE id = ? AND archived_at IS NOT NULL');
     $restoreStmt->execute([$studentIdToRestore]);
     $_SESSION['archive_notice'] = $restoreStmt->rowCount() > 0
         ? 'Student restored to the active list.'
@@ -65,14 +65,14 @@ if ($archiveColumnAvailable && in_array('id', $studentColumns, true)) {
     $statusColumn = in_array('student_status', $studentColumns, true) ? 'student_status' : null;
 
     if ($nameColumn !== null && $programColumn !== null) {
-        $nameExpression = "`{$nameColumn}`";
+        $nameExpression = "{$nameColumn}";
         if (in_array('fullname', $studentColumns, true) && in_array('full_name', $studentColumns, true)) {
-            $nameExpression = "COALESCE(NULLIF(`fullname`, ''), `full_name`)";
+            $nameExpression = "COALESCE(NULLIF(fullname, ''), full_name)";
         }
-        $numberExpression = $numberColumn !== null ? "`{$numberColumn}`" : "''";
-        $yearExpression = $yearColumn !== null ? "`{$yearColumn}`" : "''";
-        $sectionExpression = $sectionColumn !== null ? "`{$sectionColumn}`" : "''";
-        $statusExpression = $statusColumn !== null ? "`{$statusColumn}`" : "''";
+        $numberExpression = $numberColumn !== null ? "{$numberColumn}" : "''";
+        $yearExpression = $yearColumn !== null ? "{$yearColumn}" : "''";
+        $sectionExpression = $sectionColumn !== null ? "{$sectionColumn}" : "''";
+        $statusExpression = $statusColumn !== null ? "{$statusColumn}" : "''";
 
         $programCodes = $archiveType === 'shs'
             ? ['ASSH', 'BAE', 'STEM', 'ICT', 'HT']
@@ -81,17 +81,17 @@ if ($archiveColumnAvailable && in_array('id', $studentColumns, true)) {
         $programConditions = [];
         $queryParams = [];
         foreach ($programCodes as $programCode) {
-            $programConditions[] = "(`{$programColumn}` = ? OR `{$programColumn}` LIKE ?)";
+            $programConditions[] = "({$programColumn} = ? OR {$programColumn} LIKE ?)";
             $queryParams[] = $programCode;
             $queryParams[] = '%' . $programCode . '%';
         }
 
-        $archiveSql = "SELECT `id`, {$nameExpression} AS full_name, {$numberExpression} AS student_number,
-            `{$programColumn}` AS program, {$yearExpression} AS year_level, {$sectionExpression} AS section,
-            {$statusExpression} AS student_status, `archived_at`
-            FROM `students`
-            WHERE `archived_at` IS NOT NULL AND (" . implode(' OR ', $programConditions) . ")
-            ORDER BY `archived_at` DESC, full_name ASC";
+        $archiveSql = "SELECT id, {$nameExpression} AS full_name, {$numberExpression} AS student_number,
+            {$programColumn} AS program, {$yearExpression} AS year_level, {$sectionExpression} AS section,
+            {$statusExpression} AS student_status, archived_at
+            FROM students
+            WHERE archived_at IS NOT NULL AND (" . implode(' OR ', $programConditions) . ")
+            ORDER BY archived_at DESC, full_name ASC";
         $archiveStmt = $conn->prepare($archiveSql);
         $archiveStmt->execute($queryParams);
         $archiveStudents = $archiveStmt->fetchAll(PDO::FETCH_ASSOC);

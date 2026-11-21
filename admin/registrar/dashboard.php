@@ -33,30 +33,20 @@ if ($isHead && !isset($_GET['mode'])) {
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 
 function columnExists(PDO $conn, string $table, string $column): bool
 {
-    try {
-        $stmt = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerColumnExists($conn, $table, $column);
 }
 
 
 function getTableCount(PDO $conn, string $table): int
 {
     try {
-        $stmt = $conn->query("SELECT COUNT(*) FROM `$table`");
+        $stmt = $conn->query("SELECT COUNT(*) FROM $table");
         return (int) $stmt->fetchColumn();
     } catch (Throwable $e) {
         return 0;
@@ -103,15 +93,15 @@ foreach ($shsCourseList as $course) {
 $archiveFilter = '';
 if (tableExists($conn, 'students')) {
     try {
-        $cols = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+        $cols = octrackerListColumns($conn, 'students');
         if (in_array('archived_at', $cols, true)) {
-            $archiveFilter = ' AND `archived_at` IS NULL';
+            $archiveFilter = ' AND archived_at IS NULL';
         }
     } catch (Throwable $e) {
         $archiveFilter = '';
     }
 
-    $archiveFilterAliased = $archiveFilter !== '' ? ' AND s.`archived_at` IS NULL' : '';
+    $archiveFilterAliased = $archiveFilter !== '' ? ' AND s.archived_at IS NULL' : '';
 
     foreach ($courseList as $course) {
         // Exact / prefix matches; IT also includes BSIT (without matching SHS ICT)
@@ -122,17 +112,17 @@ if (tableExists($conn, 'students')) {
         $programClauses = [];
         $programParams = [];
         foreach ($aliases as $alias) {
-            $programClauses[] = '(`program` = ? OR `program` LIKE ? OR `program` LIKE ?)';
+            $programClauses[] = '(program = ? OR program LIKE ? OR program LIKE ?)';
             $programParams[] = $alias;
             $programParams[] = $alias . ' %';
             $programParams[] = $alias . '-%';
         }
         $programSql = '(' . implode(' OR ', $programClauses) . ')';
-        $programSqlAliased = str_replace('`program`', 's.`program`', $programSql);
+        $programSqlAliased = str_replace('program', 's.program', $programSql);
 
         $stmt = $conn->prepare(
             "SELECT id, student_number, COALESCE(NULLIF(fullname, ''), full_name) AS student_name
-             FROM `students`
+             FROM students
              WHERE $programSql" . $archiveFilter . "
              ORDER BY student_name ASC"
         );
@@ -144,13 +134,13 @@ if (tableExists($conn, 'students')) {
 
         if (tableExists($conn, 'student_requirements') && columnExists($conn, 'student_requirements', 'status')) {
             $completedStmt = $conn->prepare(
-                "SELECT COUNT(*) FROM `student_requirements` sr JOIN `students` s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = 'completed'"
+                "SELECT COUNT(*) FROM student_requirements sr JOIN students s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = 'completed'"
             );
             $completedStmt->execute($programParams);
             $courseSummary[$course]['completed'] = (int) $completedStmt->fetchColumn();
 
             $missingStmt = $conn->prepare(
-                "SELECT COUNT(*) FROM `student_requirements` sr JOIN `students` s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = 'missing'"
+                "SELECT COUNT(*) FROM student_requirements sr JOIN students s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = 'missing'"
             );
             $missingStmt->execute($programParams);
             $courseSummary[$course]['missing'] = (int) $missingStmt->fetchColumn();
@@ -159,7 +149,7 @@ if (tableExists($conn, 'students')) {
             $completedRequirements += $courseSummary[$course]['completed'];
 
             foreach (['missing', 'completed'] as $status) {
-                $detailStmt = $conn->prepare("SELECT DISTINCT sr.requirement_name FROM `student_requirements` sr JOIN `students` s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = ? AND sr.requirement_name IS NOT NULL AND sr.requirement_name <> '' ORDER BY sr.requirement_name ASC");
+                $detailStmt = $conn->prepare("SELECT DISTINCT sr.requirement_name FROM student_requirements sr JOIN students s ON sr.student_id = s.id WHERE $programSqlAliased" . $archiveFilterAliased . " AND sr.status = ? AND sr.requirement_name IS NOT NULL AND sr.requirement_name <> '' ORDER BY sr.requirement_name ASC");
                 $detailStmt->execute(array_merge($programParams, [$status]));
                 $courseRequirementDetails[$status][$course] = $detailStmt->fetchAll(PDO::FETCH_COLUMN);
             }

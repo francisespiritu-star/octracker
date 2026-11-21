@@ -13,29 +13,18 @@ $roleLabel = $isHead ? 'Registrar Head' : 'Registrar Staff';
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 function columnExists(PDO $conn, string $table, string $column): bool
 {
-    try {
-        $stmt = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerColumnExists($conn, $table, $column);
 }
 
 function getStudentColumns(PDO $conn): array
 {
     try {
-        $stmt = $conn->query("SHOW COLUMNS FROM `students`");
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return octrackerListColumns($conn, 'students');
     } catch (Throwable $e) {
         return [];
     }
@@ -53,7 +42,7 @@ if (tableExists($conn, 'students')) {
     $columns = getStudentColumns($conn);
     if (!in_array('archived_at', $columns, true)) {
         try {
-            $conn->exec("ALTER TABLE `students` ADD COLUMN `archived_at` DATETIME NULL DEFAULT NULL");
+            ensureStudentsTable($conn);
             $columns = getStudentColumns($conn);
         } catch (Throwable $e) {
         }
@@ -108,10 +97,10 @@ if (tableExists($conn, 'students')) {
         $archivedCount = 0;
 
         if ($archiveColumnAvailable && $studentIds !== [] && $yearColumn !== null) {
-            $archiveSql = "UPDATE `students` SET `archived_at` = NOW() WHERE `id` IN (" . implode(',', array_fill(0, count($studentIds), '?')) . ") AND `archived_at` IS NULL AND `{$yearColumn}` = ?";
+            $archiveSql = "UPDATE students SET archived_at = NOW() WHERE id IN (" . implode(',', array_fill(0, count($studentIds), '?')) . ") AND archived_at IS NULL AND {$yearColumn} = ?";
             $archiveParams = array_merge($studentIds, [$yearLevel]);
             if ($programColumn !== null) {
-                $archiveSql .= " AND `{$programColumn}` = ?";
+                $archiveSql .= " AND {$programColumn} = ?";
                 $archiveParams[] = $program;
             }
             $archiveStmt = $conn->prepare($archiveSql);
@@ -155,40 +144,40 @@ if (tableExists($conn, 'students')) {
             $params = [];
 
             if (in_array('fullname', $columns, true)) {
-                $setParts[] = '`fullname` = ?';
+                $setParts[] = 'fullname = ?';
                 $params[] = $fullName;
             }
             if (in_array('full_name', $columns, true)) {
-                $setParts[] = '`full_name` = ?';
+                $setParts[] = 'full_name = ?';
                 $params[] = $fullName;
             }
             if (in_array('student_number', $columns, true)) {
-                $setParts[] = '`student_number` = ?';
+                $setParts[] = 'student_number = ?';
                 $params[] = $studentNumber;
             } elseif (in_array('studentno', $columns, true)) {
-                $setParts[] = '`studentno` = ?';
+                $setParts[] = 'studentno = ?';
                 $params[] = $studentNumber;
             }
             if ($statusColumn !== null) {
-                $setParts[] = "`{$statusColumn}` = ?";
+                $setParts[] = "{$statusColumn} = ?";
                 $params[] = $status !== '' ? $status : 'Regular';
             }
             if ($yearColumn !== null && $newYearLevel !== '') {
-                $setParts[] = "`{$yearColumn}` = ?";
+                $setParts[] = "{$yearColumn} = ?";
                 $params[] = $newYearLevel;
             }
             if ($sectionColumn !== null) {
-                $setParts[] = "`{$sectionColumn}` = ?";
+                $setParts[] = "{$sectionColumn} = ?";
                 $params[] = $newSection;
             }
             if ($programColumn !== null && $newProgram !== '') {
-                $setParts[] = "`{$programColumn}` = ?";
+                $setParts[] = "{$programColumn} = ?";
                 $params[] = $newProgram;
             }
 
             if ($setParts !== []) {
                 $params[] = $studentId;
-                $updateSql = 'UPDATE `students` SET ' . implode(', ', $setParts) . ' WHERE `id` = ?';
+                $updateSql = 'UPDATE students SET ' . implode(', ', $setParts) . ' WHERE id = ?';
                 $conn->prepare($updateSql)->execute($params);
             }
 
@@ -209,9 +198,9 @@ if (tableExists($conn, 'students')) {
         $promotedCount = 0;
 
         if ($yearColumn !== null && $studentIds !== []) {
-            $selectSql = "SELECT `id`, `{$yearColumn}` AS current_year FROM `students` WHERE `id` IN (" . implode(',', array_fill(0, count($studentIds), '?')) . ")";
+            $selectSql = "SELECT id, {$yearColumn} AS current_year FROM students WHERE id IN (" . implode(',', array_fill(0, count($studentIds), '?')) . ")";
             if ($programColumn !== null) {
-                $selectSql .= " AND `{$programColumn}` = ?";
+                $selectSql .= " AND {$programColumn} = ?";
             }
 
             $selectParams = $studentIds;
@@ -229,15 +218,15 @@ if (tableExists($conn, 'students')) {
                     continue;
                 }
 
-                $setSql = "`{$yearColumn}` = ?";
+                $setSql = "{$yearColumn} = ?";
                 if ($sectionColumn !== null) {
-                    $setSql .= ", `{$sectionColumn}` = ''";
+                    $setSql .= ", {$sectionColumn} = ''";
                 }
 
-                $updateSql = "UPDATE `students` SET {$setSql} WHERE `id` = ? AND `{$yearColumn}` = ?";
+                $updateSql = "UPDATE students SET {$setSql} WHERE id = ? AND {$yearColumn} = ?";
                 $params = [$levels[$currentIndex + 1], (int) $student['id'], $currentYear];
                 if ($programColumn !== null) {
-                    $updateSql .= " AND `{$programColumn}` = ?";
+                    $updateSql .= " AND {$programColumn} = ?";
                     $params[] = $program;
                 }
 
@@ -258,46 +247,46 @@ if (tableExists($conn, 'students')) {
     }
 
     if ($fullNameColumn !== null && $yearColumn !== null) {
-        $sql = "SELECT `{$fullNameColumn}` AS full_name";
-        $sql .= ", `id` AS student_id";
+        $sql = "SELECT {$fullNameColumn} AS full_name";
+        $sql .= ", id AS student_id";
 
         if ($statusColumn !== null) {
-            $sql .= ", `{$statusColumn}` AS student_status";
+            $sql .= ", {$statusColumn} AS student_status";
         } else {
             $sql .= ", '' AS student_status";
         }
 
-        $sql .= ", `{$yearColumn}` AS year_level";
+        $sql .= ", {$yearColumn} AS year_level";
 
         if ($sectionColumn !== null) {
-            $sql .= ", `{$sectionColumn}` AS section";
+            $sql .= ", {$sectionColumn} AS section";
         } else {
             $sql .= ", '' AS section";
         }
 
         if (in_array('student_number', $columns, true)) {
-            $sql .= ", `student_number` AS student_number";
+            $sql .= ", student_number AS student_number";
         } else {
             $sql .= ", '' AS student_number";
         }
 
         if (in_array('program', $columns, true)) {
-            $sql .= ", `program` AS program";
+            $sql .= ", program AS program";
         } elseif (in_array('course', $columns, true)) {
-            $sql .= ", `course` AS program";
+            $sql .= ", course AS program";
         } else {
             $sql .= ", '' AS program";
         }
 
-        $sql .= " FROM `students` WHERE `{$yearColumn}` = :year_level";
+        $sql .= " FROM students WHERE {$yearColumn} = :year_level";
 
         if (in_array('program', $columns, true) || in_array('course', $columns, true)) {
             $programColumn = in_array('program', $columns, true) ? 'program' : 'course';
-            $sql .= " AND `{$programColumn}` = :program";
+            $sql .= " AND {$programColumn} = :program";
         }
 
         if ($archiveColumnAvailable) {
-            $sql .= " AND `archived_at` IS NULL";
+            $sql .= " AND archived_at IS NULL";
         }
 
         $sql .= " ORDER BY full_name ASC";
@@ -315,7 +304,7 @@ if (tableExists($conn, 'students')) {
             $requirementStatus = 'Missing';
 
             if (tableExists($conn, 'student_requirements') && columnExists($conn, 'student_requirements', 'status')) {
-                $reqSql = "SELECT COUNT(*) AS total, SUM(CASE WHEN LOWER(`status`) <> 'completed' THEN 1 ELSE 0 END) AS missing FROM `student_requirements` WHERE `student_id` = :student_id";
+                $reqSql = "SELECT COUNT(*) AS total, SUM(CASE WHEN LOWER(status) <> 'completed' THEN 1 ELSE 0 END) AS missing FROM student_requirements WHERE student_id = :student_id";
                 $reqStmt = $conn->prepare($reqSql);
                 $reqStmt->bindValue(':student_id', (int) ($row['student_id'] ?? 0), PDO::PARAM_INT);
                 $reqStmt->execute();

@@ -26,20 +26,15 @@ $showProfileAfterSave = false;
 
 function tableExists(PDO $conn, string $table): bool
 {
-    try {
-        $stmt = $conn->query("SHOW TABLES LIKE '$table'");
-        return $stmt->fetchColumn() !== false;
-    } catch (Throwable $e) {
-        return false;
-    }
+    return octrackerTableExists($conn, $table);
 }
 
 $archiveColumnAvailable = false;
 try {
-    $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+    $studentColumns = octrackerListColumns($conn, 'students');
     if (!in_array('archived_at', $studentColumns, true)) {
-        $conn->exec('ALTER TABLE `students` ADD COLUMN `archived_at` DATETIME NULL DEFAULT NULL');
-        $studentColumns = $conn->query('SHOW COLUMNS FROM `students`')->fetchAll(PDO::FETCH_COLUMN);
+        ensureStudentsTable($conn);
+        $studentColumns = octrackerListColumns($conn, 'students');
     }
     $archiveColumnAvailable = in_array('archived_at', $studentColumns, true);
 } catch (Throwable $e) {
@@ -52,7 +47,7 @@ if ($studentId > 0) {
     if ($archiveColumnAvailable) {
         $selectSql .= ', archived_at';
     }
-    $selectSql .= ' FROM `students` WHERE id = ?';
+    $selectSql .= ' FROM students WHERE id = ?';
     $stmt = $conn->prepare($selectSql);
     $stmt->execute([$studentId]);
     $student = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -66,7 +61,7 @@ if (!$student && isset($_GET['sn'])) {
         if ($archiveColumnAvailable) {
             $selectSql .= ', archived_at';
         }
-        $selectSql .= ' FROM `students` WHERE student_number = ? OR id = ? LIMIT 1';
+        $selectSql .= ' FROM students WHERE student_number = ? OR id = ? LIMIT 1';
         $stmt = $conn->prepare($selectSql);
         $stmt->execute([$sn, (int) $sn]);
         $student = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -108,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_student'])) {
     if ($archiveColumnAvailable) {
-        $archiveStmt = $conn->prepare('UPDATE `students` SET `archived_at` = NOW() WHERE `id` = ? AND `archived_at` IS NULL');
+        $archiveStmt = $conn->prepare('UPDATE students SET archived_at = NOW() WHERE id = ? AND archived_at IS NULL');
         $archiveStmt->execute([$studentId]);
         if ($archiveStmt->rowCount() > 0) {
             logActivity($conn, $_SESSION['fullname'] ?? $roleLabel, $_SESSION['role'] ?? 'Registrar', 'archived student', 'Archived student #' . $studentId);
@@ -128,9 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_student'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_student'])) {
     try {
         if (tableExists($conn, 'student_requirements')) {
-            $conn->prepare('DELETE FROM `student_requirements` WHERE student_id = ?')->execute([$studentId]);
+            $conn->prepare('DELETE FROM student_requirements WHERE student_id = ?')->execute([$studentId]);
         }
-        $deleteStmt = $conn->prepare('DELETE FROM `students` WHERE id = ?');
+        $deleteStmt = $conn->prepare('DELETE FROM students WHERE id = ?');
         $deleteStmt->execute([$studentId]);
         logActivity($conn, $_SESSION['fullname'] ?? $roleLabel, $_SESSION['role'] ?? 'Registrar', 'deleted student', 'Deleted student #' . $studentId);
         header('Location: ' . $studentListUrl);
@@ -175,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         $editMode = true;
     } else {
         try {
-            $updateStmt = $conn->prepare("UPDATE `students` SET fullname = ?, full_name = ?, student_number = ?, email = ?, program = ?, year_level = ?, section = ?, student_status = ? WHERE id = ?");
+            $updateStmt = $conn->prepare("UPDATE students SET fullname = ?, full_name = ?, student_number = ?, email = ?, program = ?, year_level = ?, section = ?, student_status = ? WHERE id = ?");
             $updated = $updateStmt->execute([$fullName, $fullName, $studentNumber, $email, $program, $yearLevel, $section, $status !== '' ? $status : 'Regular', $studentId]);
 
             if ($updated) {
@@ -189,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                 if ($archiveColumnAvailable) {
                     $selectSql .= ', archived_at';
                 }
-                $selectSql .= ' FROM `students` WHERE id = ?';
+                $selectSql .= ' FROM students WHERE id = ?';
                 $stmt = $conn->prepare($selectSql);
                 $stmt->execute([$studentId]);
                 $student = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -212,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
 }
 
 if (tableExists($conn, 'student_requirements')) {
-    $stmt = $conn->prepare("SELECT requirement_name, status FROM `student_requirements` WHERE student_id = ? ORDER BY id ASC");
+    $stmt = $conn->prepare("SELECT requirement_name, status FROM student_requirements WHERE student_id = ? ORDER BY id ASC");
     $stmt->execute([$studentId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

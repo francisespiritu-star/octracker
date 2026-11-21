@@ -30,23 +30,7 @@ function defaultShsRequirements(): array
 
 function ensureRequirementsSettingsColumns(PDO $conn): void
 {
-    $conn->exec("CREATE TABLE IF NOT EXISTS system_settings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        school_name VARCHAR(255) NOT NULL DEFAULT '',
-        system_name VARCHAR(255) NOT NULL DEFAULT '',
-        motto VARCHAR(255) NOT NULL DEFAULT '',
-        academic_year VARCHAR(20) NOT NULL DEFAULT '',
-        semester VARCHAR(50) NOT NULL DEFAULT ''
-    )");
-
-    $columns = $conn->query('SHOW COLUMNS FROM system_settings')->fetchAll(PDO::FETCH_COLUMN);
-
-    if (!in_array('college_requirements', $columns, true)) {
-        $conn->exec('ALTER TABLE system_settings ADD COLUMN college_requirements TEXT NULL');
-    }
-    if (!in_array('shs_requirements', $columns, true)) {
-        $conn->exec('ALTER TABLE system_settings ADD COLUMN shs_requirements TEXT NULL');
-    }
+    ensureSystemSettingsTable($conn);
 
     $count = (int) $conn->query('SELECT COUNT(*) FROM system_settings')->fetchColumn();
     if ($count === 0) {
@@ -173,14 +157,7 @@ function getRequiredDocuments(PDO $conn, string $programOrTrack = 'college'): ar
 
 function syncStudentRequirements(PDO $conn, int $studentId, array $masterList, array $selectedCompleted): void
 {
-    $conn->exec("CREATE TABLE IF NOT EXISTS `student_requirements` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        student_id INT NOT NULL,
-        requirement_name VARCHAR(255) NOT NULL,
-        status VARCHAR(30) NOT NULL DEFAULT 'missing',
-        INDEX (student_id),
-        INDEX (status)
-    )");
+    ensureStudentRequirementsTable($conn);
 
     $existingStmt = $conn->prepare('SELECT requirement_name FROM student_requirements WHERE student_id = ?');
     $existingStmt->execute([$studentId]);
