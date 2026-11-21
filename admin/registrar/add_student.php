@@ -261,23 +261,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         }
 
         .email-input-wrapper {
-            position: relative;
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            width: 100%;
         }
 
         .email-input-wrapper input {
-            width: 100%;
-            padding-right: 220px;
+            flex: 1 1 auto;
+            min-width: 0;
+            width: auto;
+            padding-right: 12px;
         }
 
-        .email-input-wrapper .email-suffix {
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: rgba(255,255,255,.75);
-            font-size: 14px;
-            pointer-events: none;
-            white-space: nowrap;
+        .email-input-wrapper .email-domain {
+            flex: 0 1 auto;
+            width: auto;
+            max-width: 58%;
+            min-width: 0;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.18);
+            background: rgba(255,255,255,.08);
+            color: #f4f8ff;
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+            appearance: auto;
+        }
+
+        .email-input-wrapper .email-domain option {
+            color: #0f172a;
+            background: #fff;
         }
 
         .field input[type="text"],
@@ -294,6 +309,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         @media (max-width: 700px) {
             .name-fields {
                 grid-template-columns: 1fr;
+            }
+
+            .email-input-wrapper {
+                flex-direction: column;
+            }
+
+            .email-input-wrapper .email-domain {
+                max-width: 100%;
             }
         }
 
@@ -444,7 +467,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                     ?>
                     <div class="email-input-wrapper">
                         <input type="text" id="email_local" name="email_local" value="<?php echo htmlspecialchars($emailLocalValue); ?>" placeholder="username" autocomplete="off" required>
-                        <select id="email_domain" name="email_domain" class="email-suffix" style="max-width:280px;">
+                        <select id="email_domain" name="email_domain" class="email-domain" aria-label="Email domain">
                             <option value="olivarezcollege.edu.ph" <?php echo $emailDomainValue === 'olivarezcollege.edu.ph' ? 'selected' : ''; ?>>@olivarezcollege.edu.ph</option>
                             <option value="olivarezcollegetagaytay.edu.ph" <?php echo $emailDomainValue === 'olivarezcollegetagaytay.edu.ph' ? 'selected' : ''; ?>>@olivarezcollegetagaytay.edu.ph</option>
                         </select>
