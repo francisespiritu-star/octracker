@@ -4,7 +4,7 @@
  * Shared student number / email validation helpers.
  */
 
-const OLIVAREZ_STUDENT_EMAIL_DOMAIN = 'olivarezcollege.edu.ph';
+const OLIVAREZ_STUDENT_EMAIL_DOMAIN = 'olivarezcollegetagaytay.edu.ph';
 
 function normalizeStudentEmail(string $email): string
 {
@@ -92,7 +92,7 @@ function validateStudentNumberAndEmail(
     }
 
     if ($email !== '' && !isValidOlivarezStudentEmail($email)) {
-        return 'Enter a valid Olivarez College email (example@olivarezcollege.edu.ph).';
+        return 'Enter a valid Olivarez College email (example@olivarezcollegetagaytay.edu.ph).';
     }
 
     if ($email !== '' && studentEmailExists($conn, $email, $excludeStudentId)) {

@@ -346,8 +346,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student']) && $s
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
-                            <input type="email" name="email" value="<?php echo htmlspecialchars($student['email'] ?? ''); ?>" placeholder="name@olivarezcollege.edu.ph" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff;">
-                            <small style="opacity:.8;">Must end with @olivarezcollege.edu.ph</small>
+                            <input type="email" name="email" value="<?php echo htmlspecialchars($student['email'] ?? ''); ?>" placeholder="name@olivarezcollegetagaytay.edu.ph" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff;">
+                            <small style="opacity:.8;">Must end with @olivarezcollegetagaytay.edu.ph</small>
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:6px; font-weight:600;">Program</label>

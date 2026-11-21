@@ -272,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
         .email-input-wrapper input#email_local {
             width: 100%;
             box-sizing: border-box;
-            padding-right: 210px;
+            padding-right: 280px;
         }
 
         .email-input-wrapper .email-suffix {
@@ -305,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
 
             .email-input-wrapper input#email_local {
                 padding-right: 12px;
-                padding-bottom: 34px;
+                padding-bottom: 36px;
             }
 
             .email-input-wrapper .email-suffix {
@@ -313,7 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                 top: auto;
                 bottom: 10px;
                 transform: none;
-                font-size: 12px;
+                font-size: 11px;
             }
         }
 
@@ -453,14 +453,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
                     <label for="email_local">Student Email</label>
                     <?php
                     $postedEmail = (string) ($_POST['email'] ?? '');
-                    $emailLocalValue = preg_replace('/@olivarezcollege\.edu\.ph$/i', '', $postedEmail) ?? $postedEmail;
+                    $emailLocalValue = preg_replace('/@olivarezcollegetagaytay\.edu\.ph$/i', '', $postedEmail) ?? $postedEmail;
                     if ($emailLocalValue === $postedEmail && strpos($postedEmail, '@') !== false) {
                         $emailLocalValue = '';
                     }
                     ?>
                     <div class="email-input-wrapper">
                         <input type="text" id="email_local" name="email_local" value="<?php echo htmlspecialchars($emailLocalValue); ?>" placeholder="" autocomplete="off" required>
-                        <span class="email-suffix">@olivarezcollege.edu.ph</span>
+                        <span class="email-suffix">@olivarezcollegetagaytay.edu.ph</span>
                     </div>
                     <input type="hidden" id="email" name="email" value="<?php echo htmlspecialchars($postedEmail); ?>">
                 </div>
@@ -516,7 +516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_student'])) {
     (function() {
         var localInput = document.getElementById('email_local');
         var hiddenEmail = document.getElementById('email');
-        var domain = '@olivarezcollege.edu.ph';
+        var domain = '@olivarezcollegetagaytay.edu.ph';
 
         function syncEmail() {
             var localValue = localInput.value.trim();
